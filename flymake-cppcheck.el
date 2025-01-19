@@ -1,3 +1,38 @@
+;;; flymake-cppcheck.el --- Cppcheck integration with flymake. -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2022  Free Software Foundation, Inc.
+
+;; Author: Jimmy Aguilar Mena
+;; URL: https://github.com/Ergus/gtags-mode
+;; Keywords: cppcheck flymake
+;; Version: 0.1
+;; Package-Requires: ((emacs "28"))
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; Cppcheck integration with Flymake.
+
+;; This attempt to integrate cppcheck with flymake with special care
+;; to tramp and remote systems.
+
+;; One of the goals is to integrate also with project and
+;; project-multi packages.
+
+;;; Code:
+
 (defcustom flymake-cppcheck-executable "cppcheck"
   "cppcheck executable")
 
@@ -14,12 +49,12 @@
       (goto-char (point-min))
       (while (re-search-forward
 	      "^\\([^:]+\\):\\([0-9]+\\):\\([0-9]+\\):\\([^:]+\\):\\(.*\\)$" nil t)
-	(let ((file (match-string 1))
-	      (line (string-to-number (match-string 2)))
-	      (column (string-to-number (match-string 3)))
-	      (severity (match-string 4))
-	      (msg (match-string 5)))
-          (when (string= (file-truename file) copy-file)
+	(when (string= (file-truename (match-string-no-properties 1)) copy-file)
+	  (let ((file (match-string-no-properties 1))
+		(line (string-to-number (match-string-no-properties 2)))
+		(column (string-to-number (match-string-no-properties 3)))
+		(severity (match-string-no-properties 4))
+		(msg (match-string-no-properties 5)))
             (push (flymake-make-diagnostic
                    orig-file
                    (cons line column)
@@ -71,7 +106,7 @@
 
   (when (process-live-p flymake-cppcheck--process)
     (kill-process flymake-cppcheck--process))
-  
+
   (let ((copy-file (make-temp-file
 		    "flymake-cppcheck"
 		    nil ;; not a directory
@@ -103,6 +138,13 @@
   (when flymake-cppcheck--executable
     (flymake-cppcheck--process-start report-fn (current-buffer))))
 
-(setq-local flymake-diagnostic-functions '(flymake-cppcheck-backend))
+;;;###autoload
+(define-minor-mode flymake-cppcheck-mode
+  "Use cppcheck as backend flymake."
+  (if flymake-cppcheck-mode
+      (add-hook 'flymake-diagnostic-functions #'flymake-cppcheck-backend)
+    (remove-hook 'flymake-diagnostic-functions #'flymake-cppcheck-backend)))
 
-;;(add-hook 'flymake-diagnostic-functions 'flymake-cppcheck-backend nil t)
+(provide 'flymake-cppcheck)
+;;; flymake-cppcheck.el ends here
+
