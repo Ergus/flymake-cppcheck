@@ -33,25 +33,32 @@
 
 ;;; Code:
 
+(require 'flymake)
+
+(defgroup flymake-cppcheck nil
+  "Cppcheck for flymake."
+  :group 'tools)
+
 (defcustom flymake-cppcheck-executable "cppcheck"
-  "cppcheck executable")
+  "cppcheck executable"
+  :type 'string)
 
 (defcustom flymake-cppcheck-arguments '("--enable=all" "--quiet")
-  "Command line arguments for cppcheck")
+  "Command line arguments for cppcheck"
+  :type '(repeat string))
 
 (defconst flymake-cppcheck--template "--template={file}:{line}:{column}:{severity}:{message}"
   "Template format for cppcheck, this is fixed because the parser depend of it")
 
 (defun flymake-cppcheck--parse-output (output-buffer copy-file orig-file)
   "Parse cppcheck output and call REPORT-FN with diagnostics for SOURCE-BUFFER."
-  (with-current-buffer (process-buffer process)
+  (with-current-buffer output-buffer
     (let ((diagnostics '()))
       (goto-char (point-min))
       (while (re-search-forward
 	      "^\\([^:]+\\):\\([0-9]+\\):\\([0-9]+\\):\\([^:]+\\):\\(.*\\)$" nil t)
 	(when (string= (file-truename (match-string-no-properties 1)) copy-file)
-	  (let ((file (match-string-no-properties 1))
-		(line (string-to-number (match-string-no-properties 2)))
+	  (let ((line (string-to-number (match-string-no-properties 2)))
 		(column (string-to-number (match-string-no-properties 3)))
 		(severity (match-string-no-properties 4))
 		(msg (match-string-no-properties 5)))
@@ -141,8 +148,12 @@
 ;;;###autoload
 (define-minor-mode flymake-cppcheck-mode
   "Use cppcheck as backend flymake."
+  :global nil
   (if flymake-cppcheck-mode
-      (add-hook 'flymake-diagnostic-functions #'flymake-cppcheck-backend)
+      (progn
+	(unless flymake-mode
+	  (flymake-mode 1))
+	(add-hook 'flymake-diagnostic-functions #'flymake-cppcheck-backend))
     (remove-hook 'flymake-diagnostic-functions #'flymake-cppcheck-backend)))
 
 (provide 'flymake-cppcheck)
