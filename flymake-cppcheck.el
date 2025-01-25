@@ -51,11 +51,10 @@
 (defconst flymake-cppcheck--template "--template={file}:{line}:{column}:{severity}:{message}"
   "Template format for cppcheck, this is fixed because the parser depend of it")
 
-(defun flymake-cppcheck--parse-output (output-buffer copy-file orig-file)
+(defun flymake-cppcheck--parse-output (output-buffer file-name)
   "Parse cppcheck output and call REPORT-FN with diagnostics for SOURCE-BUFFER."
   (with-current-buffer output-buffer
-    (let ((diagnostics '())
-	  (file-name (or copy-file orig-file)))
+    (let ((diagnostics '()))
       (goto-char (point-min))
       (while (re-search-forward
 	      "^\\([^:]+\\):\\([0-9]+\\):\\([0-9]+\\):\\([^:]+\\):\\(.*\\)$" nil t)
@@ -66,7 +65,7 @@
 		(severity (match-string-no-properties 4))
 		(msg (match-string-no-properties 5)))
             (push (flymake-make-diagnostic
-                   orig-file
+                   file-name
                    (cons line column)
 		   nil
                    (pcase severity
@@ -84,14 +83,12 @@
 		(diagnostics
 		 (flymake-cppcheck--parse-output
 		  (process-buffer process)
-		  (process-get process :flymake-cppcheck-copy-file) ;; on projects this is nil
 		  (process-get process :flymake-cppcheck-source-file))))
       (funcall (process-get process :flymake-report-fn) diagnostics))
-    (when (memq status '(exit signal failed stop))
-      (when (process-get process :flymake-cppcheck-copy-file)
-	(delete-file (process-get process :flymake-cppcheck-copy-file)))
-      ;; (kill-buffer (process-buffer process))
-      )))
+    ;; (when (memq status '(exit signal failed stop))
+    ;;   ;; (kill-buffer (process-buffer process))
+    ;;   )
+    ))
 
 (defvar-local flymake-cppcheck--executable (executable-find flymake-cppcheck-executable))
 (defvar-local flymake-cppcheck--process nil)
@@ -114,69 +111,32 @@
 	 (connection-local-set-profiles criteria symvars))))
     (hack-connection-local-variables-apply criteria)))
 
-(defun flymake-cppcheck--process-start (report-fn buffer)
-  "Flymake backend process for cppcheck."
-
-  (when (process-live-p flymake-cppcheck--process)
-    (kill-process flymake-cppcheck--process))
-
-  (let ((copy-file (make-temp-file
-		    "flymake-cppcheck"
-		    nil ;; not a directory
-		    (file-name-extension (buffer-file-name buffer) t)
-		    (buffer-substring-no-properties (point-min) (point-max)))))
-    (condition-case err
-	(progn
-          (setq-local flymake-cppcheck--process
-		      (make-process
-		       :name "flymake-cppcheck"
-		       :buffer (generate-new-buffer " *cppcheck-output*")
-		       :command (flatten-tree
-				 `(,flymake-cppcheck--executable
-				   ,flymake-cppcheck--template
-				   ,flymake-cppcheck-arguments
-				   ,copy-file))
-		       :noquery t
-		       :sentinel #'flymake-cppcheck--sentinel))
-	  (process-put flymake-cppcheck--process :flymake-cppcheck-source-file (buffer-file-name buffer))
-	  (process-put flymake-cppcheck--process :flymake-cppcheck-copy-file copy-file)
-	  (process-put flymake-cppcheck--process :flymake-report-fn report-fn))
-      (error
-       (delete-file copy-file)
-       (signal (car err) (cdr err))))))
-
-(defun flymake-cppcheck--process-start-file (report-fn buffer)
+(defun flymake-cppcheck--process-start-file (report-fn buffer process-buffer)
   "Flymake backend process for cppcheck."
   (message "Running file")
-  (let ((copy-file (make-temp-file
-		    "flymake-cppcheck"
-		    nil ;; not a directory
-		    (file-name-extension (buffer-file-name buffer) t)
-		    (buffer-substring-no-properties (point-min) (point-max)))))
-    (condition-case err
-	(progn
-          (setq-local flymake-cppcheck--process
-		      (make-process
-		       :name "flymake-cppcheck-file"
-		       :buffer (generate-new-buffer " *cppcheck-output*" t)
-		       :command (flatten-tree
-				 `(,flymake-cppcheck--executable
-				   ,flymake-cppcheck--template
-				   ,flymake-cppcheck-arguments
-				   ,copy-file))
-		       :noquery t
-		       :sentinel #'flymake-cppcheck--sentinel))
-	  (process-put flymake-cppcheck--process :flymake-cppcheck-source-file (buffer-file-name buffer))
-	  (process-put flymake-cppcheck--process :flymake-cppcheck-copy-file copy-file)
-	  (process-put flymake-cppcheck--process :flymake-report-fn report-fn))
-      (error
-       (delete-file copy-file)
-       (signal (car err) (cdr err))))))
+  (condition-case err
+      (progn
+        (setq-local flymake-cppcheck--process
+		    (make-process
+		     :name "flymake-cppcheck-file"
+		     :buffer process-buffer
+		     :command (flatten-tree
+			       `(,flymake-cppcheck--executable
+				 ,flymake-cppcheck--template
+				 ,flymake-cppcheck-arguments
+				 ,(buffer-file-name buffer)))
+		     :noquery t
+		     :sentinel #'flymake-cppcheck--sentinel))
+	(process-put flymake-cppcheck--process :flymake-cppcheck-source-file (buffer-file-name buffer))
+	(process-put flymake-cppcheck--process :flymake-report-fn report-fn))
+    (error
+     (delete-file copy-file)
+     (signal (car err) (cdr err)))))
 
 
 (defvar-local flymake-cppcheck--process-build-dir nil)
 
-(defun flymake-cppcheck--process-start-project (report-fn buffer)
+(defun flymake-cppcheck--process-start-project (report-fn buffer process-buffer)
   (when-let* ((project (project-current))
 	      (build-database (project--get-extra-info project :compile-database))
 	      (default-directory (project-root project)))
@@ -188,13 +148,13 @@
       (unless (file-readable-p flymake-cppcheck--process-build-dir)
 	(make-directory flymake-cppcheck--process-build-dir)))
 
-    (message "Running process")
+    (message "Running project")
     (condition-case err
 	(progn
           (setq-local flymake-cppcheck--process
 		      (make-process
 		       :name "flymake-cppcheck-project"
-		       :buffer (generate-new-buffer " *cppcheck-output*" t)
+		       :buffer process-buffer
 		       :command (flatten-tree
 				 `(,flymake-cppcheck--executable
 				   ,flymake-cppcheck--template
@@ -210,15 +170,22 @@
        (signal (car err) (cdr err))))))
 
 (defun flymake-cppcheck-backend (report-fn &rest _args)
-  "Flymake backend for cppcheck."
+  "Flymake backend for cppcheck.
+This call performs multiple actions:
+1. Stop the previous process if it was running.
+2. Clear the process buffer (better here to debug)
+3. Attempts to call cppcheck at project level (if possible)
+4. Else, run cppcheck only for this buffer."
   (flymake-cppcheck--set-connection-locals)
   (when flymake-cppcheck--executable
 
     (when (process-live-p flymake-cppcheck--process)
       (kill-process flymake-cppcheck--process))
-
-    (or (flymake-cppcheck--process-start-project report-fn (current-buffer))
-	(flymake-cppcheck--process-start-file report-fn (current-buffer)))))
+    (let ((process-buffer (get-buffer-create " *cppcheck-output*" t)))
+      (with-current-buffer process-buffer
+	(erase-buffer))
+      (or (flymake-cppcheck--process-start-project report-fn (current-buffer) process-buffer)
+	  (flymake-cppcheck--process-start-file report-fn (current-buffer) process-buffer)))))
 
 ;;;###autoload
 (define-minor-mode flymake-cppcheck-mode
