@@ -115,19 +115,19 @@
 (defun flymake-cppcheck--process-start-file (report-fn buffer process-buffer)
   "Flymake backend process for cppcheck."
   (condition-case err
-      (let ((command (flatten-tree
-		      `(,flymake-cppcheck--executable
-			,flymake-cppcheck--template
-			,flymake-cppcheck-arguments
-			,(file-local-name (buffer-file-name buffer))))))
-	(with-current-buffer process-buffer
-	  (insert (format "# %s\n" command)))
+      (progn
         (setq-local flymake-cppcheck--process
-		    (apply #'start-file-process
-			   "flymake-cppcheck-file"
-			   process-buffer
-			   command))
-	(set-process-sentinel flymake-cppcheck--process #'flymake-cppcheck--sentinel)
+		    (make-process
+		     :name "flymake-cppcheck-file"
+		     :buffer process-buffer
+		     :command (flatten-tree
+			       `(,flymake-cppcheck--executable
+				 ,flymake-cppcheck--template
+				 ,flymake-cppcheck-arguments
+				 ,(file-local-name (buffer-file-name buffer))))
+		     :noquery t
+		     :file-handler t
+		     :sentinel #'flymake-cppcheck--sentinel))
 	(process-put flymake-cppcheck--process :flymake-cppcheck-source-file (buffer-file-name buffer))
 	(process-put flymake-cppcheck--process :flymake-report-fn report-fn))
     (error
@@ -149,7 +149,6 @@
       (unless (file-readable-p flymake-cppcheck--process-build-dir)
 	(make-directory flymake-cppcheck--process-build-dir)))
 
-    (message "Running project")
     (condition-case err
 	(progn
           (setq-local flymake-cppcheck--process
@@ -160,9 +159,12 @@
 				 `(,flymake-cppcheck--executable
 				   ,flymake-cppcheck--template
 				   ,flymake-cppcheck-arguments
-				   ,(concat "--cppcheck-build-dir=" flymake-cppcheck--process-build-dir)
-				   ,(concat "--project=" build-database)))
+				   ,(concat "--cppcheck-build-dir="
+					    (file-local-name flymake-cppcheck--process-build-dir))
+				   ,(concat "--project="
+					    (file-local-name build-database))))
 		       :noquery t
+		       :file-handler t
 		       :sentinel #'flymake-cppcheck--sentinel))
 	  (process-put flymake-cppcheck--process :flymake-cppcheck-source-file (buffer-file-name buffer))
 	  (process-put flymake-cppcheck--process :flymake-report-fn report-fn))
