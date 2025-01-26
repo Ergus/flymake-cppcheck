@@ -85,11 +85,7 @@
 		 (flymake-cppcheck--parse-output
 		  (process-buffer process)
 		  (process-get process :flymake-cppcheck-source-file))))
-      (funcall (process-get process :flymake-report-fn) diagnostics))
-    ;; (when (memq status '(exit signal failed stop))
-    ;;	 ;; (kill-buffer (process-buffer process))
-    ;;	 )
-    ))
+      (funcall (process-get process :flymake-report-fn) diagnostics))))
 
 (defvar-local flymake-cppcheck--executable (executable-find flymake-cppcheck-executable))
 (defvar-local flymake-cppcheck--process nil)
@@ -135,8 +131,7 @@
        (signal (car err) (cdr err))))))
 
 (defun flymake-cppcheck--process-start-file (report-fn buffer)
-  "Flymake backend process for cppcheck."
-
+  "Flymake backend process for cppcheck for single file ."
   (flymake-cppcheck--process-start report-fn
 				   (flatten-tree
 				    `(,flymake-cppcheck--executable
@@ -150,6 +145,7 @@
 
 
 (defun flymake-cppcheck--process-start-project (report-fn buffer)
+  "Flymake backend process for cppcheck for projects."
   (when-let* ((project (project-current))
 	      (build-database (project--get-extra-info project :compile-database))
 	      (default-directory (project-root project)))
