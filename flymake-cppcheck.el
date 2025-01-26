@@ -15,7 +15,7 @@
 
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
@@ -65,16 +65,16 @@
 		(column (string-to-number (match-string-no-properties 3)))
 		(severity (match-string-no-properties 4))
 		(msg (match-string-no-properties 5)))
-            (push (flymake-make-diagnostic
-                   file-name
-                   (cons line column)
+	    (push (flymake-make-diagnostic
+		   file-name
+		   (cons line column)
 		   nil
 		   (cond
 		    ((string-equal severity "error") :error)
 		    ((string-equal severity "warning") :warning)
 		    (t :warning))
-                   msg)
-                  diagnostics))))
+		   msg)
+		  diagnostics))))
       diagnostics)))
 
 (defun flymake-cppcheck--sentinel (process _event)
@@ -87,8 +87,8 @@
 		  (process-get process :flymake-cppcheck-source-file))))
       (funcall (process-get process :flymake-report-fn) diagnostics))
     ;; (when (memq status '(exit signal failed stop))
-    ;;   ;; (kill-buffer (process-buffer process))
-    ;;   )
+    ;;	 ;; (kill-buffer (process-buffer process))
+    ;;	 )
     ))
 
 (defvar-local flymake-cppcheck--executable (executable-find flymake-cppcheck-executable))
@@ -102,7 +102,7 @@
 	      (symvars (intern (format "flymake-cppcheck--%s-vars" remote)))
 	      (enable-connection-local-variables t))
     (unless (alist-get symvars connection-local-profile-alist)
-      (with-connection-local-variables  ;; because *-executable can be set as connection local
+      (with-connection-local-variables	;; because *-executable can be set as connection local
        (let ((cppcheck (if (local-variable-p 'flymake-cppcheck-executable)
 			   gtags-mode-global-executable
 			 (file-name-nondirectory flymake-cppcheck-executable))))
@@ -116,7 +116,7 @@
   "Flymake backend process for cppcheck."
   (condition-case err
       (progn
-        (setq-local flymake-cppcheck--process
+	(setq-local flymake-cppcheck--process
 		    (make-process
 		     :name "flymake-cppcheck-file"
 		     :buffer process-buffer
@@ -151,7 +151,7 @@
 
     (condition-case err
 	(progn
-          (setq-local flymake-cppcheck--process
+	  (setq-local flymake-cppcheck--process
 		      (make-process
 		       :name "flymake-cppcheck-project"
 		       :buffer process-buffer
