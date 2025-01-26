@@ -54,12 +54,13 @@
 (defun flymake-cppcheck--parse-output (output-buffer file-name)
   "Parse cppcheck output and call REPORT-FN with diagnostics for SOURCE-BUFFER."
   (with-current-buffer output-buffer
-    (let ((diagnostics '()))
+    (let ((diagnostics '())
+	  (local-name (file-local-name file-name)))
       (goto-char (point-min))
       (while (re-search-forward
 	      "^\\([^:]+\\):\\([0-9]+\\):\\([0-9]+\\):\\([^:]+\\):\\(.*\\)$" nil t)
 	(when (and (file-name-absolute-p (match-string-no-properties 1))
-		   (string= (match-string-no-properties 1) file-name))
+		   (string= (match-string-no-properties 1) local-name))
 	  (let ((line (string-to-number (match-string-no-properties 2)))
 		(column (string-to-number (match-string-no-properties 3)))
 		(severity (match-string-no-properties 4))
@@ -68,10 +69,10 @@
                    file-name
                    (cons line column)
 		   nil
-                   (pcase severity
-		     ("error" :error)
-		     ("warning" :warning)
-		     (_ :warning))
+		   (cond
+		    ((string-equal severity "error") :error)
+		    ((string-equal severity "warning") :warning)
+		    (t :warning))
                    msg)
                   diagnostics))))
       diagnostics)))
@@ -113,20 +114,20 @@
 
 (defun flymake-cppcheck--process-start-file (report-fn buffer process-buffer)
   "Flymake backend process for cppcheck."
-  (message "Running file")
   (condition-case err
-      (progn
+      (let ((command (flatten-tree
+		      `(,flymake-cppcheck--executable
+			,flymake-cppcheck--template
+			,flymake-cppcheck-arguments
+			,(file-local-name (buffer-file-name buffer))))))
+	(with-current-buffer process-buffer
+	  (insert (format "# %s\n" command)))
         (setq-local flymake-cppcheck--process
-		    (make-process
-		     :name "flymake-cppcheck-file"
-		     :buffer process-buffer
-		     :command (flatten-tree
-			       `(,flymake-cppcheck--executable
-				 ,flymake-cppcheck--template
-				 ,flymake-cppcheck-arguments
-				 ,(buffer-file-name buffer)))
-		     :noquery t
-		     :sentinel #'flymake-cppcheck--sentinel))
+		    (apply #'start-file-process
+			   "flymake-cppcheck-file"
+			   process-buffer
+			   command))
+	(set-process-sentinel flymake-cppcheck--process #'flymake-cppcheck--sentinel)
 	(process-put flymake-cppcheck--process :flymake-cppcheck-source-file (buffer-file-name buffer))
 	(process-put flymake-cppcheck--process :flymake-report-fn report-fn))
     (error
